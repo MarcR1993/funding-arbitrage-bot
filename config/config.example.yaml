@@ -1,0 +1,71 @@
+# =============================================================================
+# FUNDING ARBITRAGE BOT - Configuration Principale
+# =============================================================================
+
+bot:
+  name: "FundingArbitrageBot"
+  version: "1.0.0"
+  mode: "production"  # production, sandbox, paper_trading, backtest
+  log_level: "INFO"
+  evaluation_interval_seconds: 300
+
+trading:
+  tokens:
+    - "BTC"
+    - "ETH" 
+    - "SOL"
+    - "AVAX"
+    - "ATOM"
+  
+  position_size_usd: 1000
+  max_concurrent_positions: 3
+  min_spread_threshold: 0.0005
+  max_leverage: 3
+  
+  supported_pairs:
+    - name: "binance_kucoin"
+      priority: 1
+    - name: "binance_hyperliquid"  
+      priority: 2
+    - name: "kucoin_hyperliquid"
+      priority: 3
+
+risk_management:
+  stop_loss_threshold: -0.005
+  min_profit_threshold: 0.0002
+  target_daily_profit: 0.02
+  max_daily_loss: -0.01
+  max_position_age_hours: 672
+  emergency_close_threshold: -0.02
+
+exchanges:
+  binance:
+    enabled: true
+    testnet: false
+    max_positions: 2
+    funding_times_utc: ["00:00", "08:00", "16:00"]
+
+  kucoin:
+    enabled: true
+    sandbox: false
+    max_positions: 2
+    funding_times_utc: ["04:00", "12:00", "20:00"]
+
+  hyperliquid:
+    enabled: true
+    testnet: false
+    use_vault: true
+    max_positions: 2
+
+monitoring:
+  telegram:
+    enabled: false
+  health_check:
+    enabled: true
+    port: 8080
+
+logging:
+  level: "INFO"
+  files:
+    main_log: "data/logs/bot.log"
+    error_log: "data/logs/error.log"
