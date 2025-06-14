@@ -1,8 +1,2 @@
-# Testing
+# Testing only
 pytest>=7.0.0
-pytest-asyncio>=0.21.0
-
-# Code Quality
-black>=23.0.0
-flake8>=6.0.0
-isort>=5.0.0
