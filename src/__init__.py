@@ -1,15 +1,7 @@
 """
-Funding Rate Arbitrage Bot
+User Interface Package
 """
 
-__version__ = "1.0.0"
-__author__ = "Funding Bot Team"
-__description__ = "Professional funding rate arbitrage bot for crypto exchanges"
+from .cli_interface import FundingBotCLI
 
-from .bot.arbitrage_engine import ArbitrageEngine
-from .models.config import FundingBotConfig
-
-__all__ = [
-    'ArbitrageEngine',
-    'FundingBotConfig'
-]
+__all__ = ['FundingBotCLI']
