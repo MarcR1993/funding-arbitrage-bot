@@ -1,7 +1,52 @@
-# Essential dependencies only
-pydantic>=2.0.0
-pyyaml>=6.0.0
-python-dotenv>=1.0.0
-rich>=13.0.0
-questionary>=2.0.0
-click>=8.0.0
+# Core Dependencies
+cryptography>=41.0.0,<43.0.0
+pydantic>=2.5.0,<3.0.0
+pyyaml>=6.0.1,<7.0.0
+python-dotenv>=1.0.0,<2.0.0
+rich>=13.7.0,<14.0.0
+questionary>=2.0.1,<3.0.0
+click>=8.1.7,<9.0.0
+python-telegram-bot>=20.7,<21.0.0
+structlog>=23.2.0,<24.0.0
+sqlalchemy>=2.0.23,<3.0.0
+
+# Exchange Libraries
+ccxt>=4.2.0,<5.0.0
+python-binance>=1.0.17
+kucoin-python>=1.0.12
+
+# Data Processing
+pandas>=2.1.0,<3.0.0
+numpy>=1.24.0,<2.0.0
+
+# Async & Networking
+aiohttp>=3.9.0,<4.0.0
+aiofiles>=23.2.1,<24.0.0
+websockets>=12.0,<13.0.0
+httpx>=0.25.0,<1.0.0
+
+# Trading & Financial
+TA-Lib>=0.4.25
+quantlib>=1.31
+
+# CLI & Interface
+typer>=0.9.0,<1.0.0
+colorama>=0.4.6,<1.0.0
+tabulate>=0.9.0,<1.0.0
+
+# Monitoring & Logging
+prometheus-client>=0.19.0,<1.0.0
+psutil>=5.9.6,<6.0.0
+
+# Configuration
+omegaconf>=2.3.0,<3.0.0
+hydra-core>=1.3.2,<2.0.0
+
+# Testing (optional)
+pytest>=7.4.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.1.0,<5.0.0
+
+# Production
+gunicorn>=21.2.0,<22.0.0
+uvicorn>=0.24.0,<1.0.0
