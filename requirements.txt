@@ -1,21 +1,7 @@
-# Core Trading Libraries
-ccxt>=4.0.0
-aiohttp>=3.8.0
-pandas>=2.0.0
-numpy>=1.24.0
+# Essential dependencies only
 pydantic>=2.0.0
-
-# Configuration
 pyyaml>=6.0.0
 python-dotenv>=1.0.0
-
-# CLI Interface
 rich>=13.0.0
 questionary>=2.0.0
 click>=8.0.0
-
-# Crypto (version simplifiée)
-cryptography>=40.0.0
-
-# Async utilities
-asyncio
