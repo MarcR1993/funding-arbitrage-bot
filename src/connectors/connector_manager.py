@@ -1,23 +1,26 @@
+# src/connectors/connector_manager.py
 """
-Connector manager for handling multiple exchange connections.
+Updated connector manager for handling multiple exchange connections.
 Attribution: Inspired by Hummingbot's connector management (Apache 2.0)
 """
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type, Union
 from decimal import Decimal
 
 from .base_connector import BaseConnector
 from .binance_connector import BinanceConnector
 from .bybit_connector import BybitConnector
+from .hyperliquid_connector import HyperliquidConnector
+from .kucoin_connector import KuCoinConnector
 from src.models.funding_rate import FundingRate
 from src.models.balance import Balance
 
 
 class ConnectorManager:
     """
-    Manages multiple exchange connectors.
+    Manages multiple exchange connectors including Binance, Bybit, Hyperliquid, and KuCoin.
     """
     
     def __init__(self):
@@ -27,7 +30,8 @@ class ConnectorManager:
         self._connector_classes: Dict[str, Type[BaseConnector]] = {
             'binance': BinanceConnector,
             'bybit': BybitConnector,
-            # Add more exchanges here: 'okx': OKXConnector, etc.
+            'hyperliquid': HyperliquidConnector,
+            'kucoin': KuCoinConnector,
         }
         
         # Active connectors
@@ -36,25 +40,60 @@ class ConnectorManager:
         # Aggregated data
         self._all_funding_rates: Dict[str, Dict[str, FundingRate]] = {}
         self._all_balances: Dict[str, Dict[str, Balance]] = {}
+        
+        # Exchange-specific configuration requirements
+        self._exchange_configs = {
+            'binance': {'required_fields': ['api_key', 'api_secret']},
+            'bybit': {'required_fields': ['api_key', 'api_secret']},
+            'hyperliquid': {'required_fields': ['api_key', 'api_secret']},
+            'kucoin': {'required_fields': ['api_key', 'api_secret', 'passphrase']},
+        }
     
     async def add_connector(self, 
                            exchange: str, 
-                           api_key: str, 
-                           api_secret: str, 
+                           credentials: Dict[str, str],
                            sandbox: bool = False) -> bool:
-        """Add and start a new connector"""
+        """
+        Add and start a new connector with exchange-specific credentials.
+        
+        Args:
+            exchange: Exchange name ('binance', 'bybit', 'hyperliquid', 'kucoin')
+            credentials: Dict with exchange-specific credentials
+            sandbox: Whether to use sandbox/testnet
+        """
         try:
             if exchange not in self._connector_classes:
                 self.logger.error(f"Unsupported exchange: {exchange}")
+                self.logger.info(f"Supported exchanges: {list(self._connector_classes.keys())}")
                 return False
             
             if exchange in self._connectors:
                 self.logger.warning(f"Connector for {exchange} already exists")
                 return True
             
-            # Create connector instance
+            # Validate required credentials
+            required_fields = self._exchange_configs[exchange]['required_fields']
+            for field in required_fields:
+                if field not in credentials:
+                    self.logger.error(f"Missing required credential '{field}' for {exchange}")
+                    return False
+            
+            # Create connector instance with exchange-specific parameters
             connector_class = self._connector_classes[exchange]
-            connector = connector_class(api_key, api_secret, sandbox)
+            
+            if exchange == 'kucoin':
+                connector = connector_class(
+                    api_key=credentials['api_key'],
+                    api_secret=credentials['api_secret'],
+                    passphrase=credentials['passphrase'],
+                    sandbox=sandbox
+                )
+            else:
+                connector = connector_class(
+                    api_key=credentials['api_key'],
+                    api_secret=credentials['api_secret'],
+                    sandbox=sandbox
+                )
             
             # Set up event handlers
             connector.add_event_handler("funding_rate_update", self._on_funding_rate_update)
@@ -64,15 +103,44 @@ class ConnectorManager:
             success = await connector.start()
             if success:
                 self._connectors[exchange] = connector
-                self.logger.info(f"Successfully added connector for {exchange}")
+                self.logger.info(f"✅ Successfully added connector for {exchange}")
                 return True
             else:
-                self.logger.error(f"Failed to start connector for {exchange}")
+                self.logger.error(f"❌ Failed to start connector for {exchange}")
                 return False
                 
         except Exception as e:
             self.logger.error(f"Error adding connector for {exchange}: {e}")
             return False
+    
+    async def add_binance(self, api_key: str, api_secret: str, sandbox: bool = False) -> bool:
+        """Convenience method to add Binance connector"""
+        return await self.add_connector('binance', {
+            'api_key': api_key,
+            'api_secret': api_secret
+        }, sandbox)
+    
+    async def add_bybit(self, api_key: str, api_secret: str, sandbox: bool = False) -> bool:
+        """Convenience method to add Bybit connector"""
+        return await self.add_connector('bybit', {
+            'api_key': api_key,
+            'api_secret': api_secret
+        }, sandbox)
+    
+    async def add_hyperliquid(self, api_key: str, api_secret: str, sandbox: bool = False) -> bool:
+        """Convenience method to add Hyperliquid connector"""
+        return await self.add_connector('hyperliquid', {
+            'api_key': api_key,
+            'api_secret': api_secret
+        }, sandbox)
+    
+    async def add_kucoin(self, api_key: str, api_secret: str, passphrase: str, sandbox: bool = False) -> bool:
+        """Convenience method to add KuCoin connector"""
+        return await self.add_connector('kucoin', {
+            'api_key': api_key,
+            'api_secret': api_secret,
+            'passphrase': passphrase
+        }, sandbox)
     
     async def remove_connector(self, exchange: str) -> bool:
         """Remove and stop a connector"""
@@ -115,6 +183,40 @@ class ConnectorManager:
     def get_connected_exchanges(self) -> List[str]:
         """Get list of connected exchange names"""
         return [name for name, conn in self._connectors.items() if conn.is_connected]
+    
+    def get_exchange_info(self) -> Dict[str, dict]:
+        """Get information about all supported exchanges"""
+        return {
+            'binance': {
+                'name': 'Binance Futures',
+                'type': 'CEX',
+                'funding_interval': 8,
+                'supported_pairs': ['BTC-USDT', 'ETH-USDT', 'BNB-USDT', 'ADA-USDT'],
+                'credentials': ['api_key', 'api_secret']
+            },
+            'bybit': {
+                'name': 'Bybit',
+                'type': 'CEX',
+                'funding_interval': 8,
+                'supported_pairs': ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'DOGE-USDT'],
+                'credentials': ['api_key', 'api_secret']
+            },
+            'hyperliquid': {
+                'name': 'Hyperliquid',
+                'type': 'DEX',
+                'funding_interval': 8,
+                'supported_pairs': ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'],
+                'credentials': ['api_key', 'api_secret'],
+                'note': 'Decentralized perpetual exchange'
+            },
+            'kucoin': {
+                'name': 'KuCoin Futures',
+                'type': 'CEX',
+                'funding_interval': 8,
+                'supported_pairs': ['BTC-USDT', 'ETH-USDT', 'KCS-USDT'],
+                'credentials': ['api_key', 'api_secret', 'passphrase']
+            }
+        }
     
     async def _on_funding_rate_update(self, data: dict):
         """Handle funding rate updates from connectors"""
@@ -172,8 +274,10 @@ class ConnectorManager:
         """Get all balances from all exchanges"""
         return self._all_balances.copy()
     
-    async def get_arbitrage_opportunities(self, symbol: str, min_profit_threshold: Decimal) -> List[dict]:
-        """Find arbitrage opportunities for a symbol"""
+    async def get_arbitrage_opportunities(self, 
+                                        symbol: str, 
+                                        min_profit_threshold: Decimal) -> List[dict]:
+        """Find arbitrage opportunities for a symbol across all connected exchanges"""
         opportunities = []
         rates = self.get_funding_rates(symbol)
         
@@ -188,7 +292,7 @@ class ConnectorManager:
                 rate1 = rates[exchange1].rate
                 rate2 = rates[exchange2].rate
                 
-                # Calculate profit potential
+                # Calculate profit potential (rate difference)
                 profit_diff = abs(rate1 - rate2)
                 
                 if profit_diff > min_profit_threshold:
@@ -207,7 +311,10 @@ class ConnectorManager:
                         "long_rate": long_rate,
                         "short_rate": short_rate,
                         "rate_difference": profit_diff,
-                        "profit_potential": profit_diff  # Simplified calculation
+                        "profit_potential": profit_diff,
+                        "next_funding_long": rates[long_exchange].next_funding_time,
+                        "next_funding_short": rates[short_exchange].next_funding_time,
+                        "annual_profit_estimate": profit_diff * Decimal("365") * Decimal("3")  # ~3 times per day
                     }
                     
                     opportunities.append(opportunity)
@@ -216,6 +323,50 @@ class ConnectorManager:
         opportunities.sort(key=lambda x: x["profit_potential"], reverse=True)
         
         return opportunities
+    
+    def get_status_summary(self) -> dict:
+        """Get a summary of all connector statuses"""
+        summary = {
+            "total_connectors": len(self._connectors),
+            "connected_exchanges": self.get_connected_exchanges(),
+            "total_symbols_tracked": 0,
+            "exchanges": {}
+        }
+        
+        for exchange, connector in self._connectors.items():
+            exchange_info = {
+                "status": "connected" if connector.is_connected else "disconnected",
+                "symbols_tracked": len(self._all_funding_rates.get(exchange, {})),
+                "last_update": None
+            }
+            
+            # Get latest update time
+            if exchange in self._all_funding_rates:
+                latest_time = None
+                for symbol, rate in self._all_funding_rates[exchange].items():
+                    if latest_time is None or rate.updated_at > latest_time:
+                        latest_time = rate.updated_at
+                exchange_info["last_update"] = latest_time
+            
+            summary["exchanges"][exchange] = exchange_info
+            summary["total_symbols_tracked"] += exchange_info["symbols_tracked"]
+        
+        return summary
+    
+    async def health_check(self) -> Dict[str, bool]:
+        """Perform health check on all connectors"""
+        health = {}
+        
+        for exchange, connector in self._connectors.items():
+            try:
+                # Try to get a funding rate as a health check
+                test_result = await connector.get_funding_rate("BTC-USDT")
+                health[exchange] = test_result is not None
+            except Exception as e:
+                self.logger.error(f"Health check failed for {exchange}: {e}")
+                health[exchange] = False
+        
+        return health
 
 
 # ========== Update src/connectors/__init__.py ==========
@@ -228,139 +379,13 @@ Attribution: Based on Hummingbot connector architecture (Apache 2.0)
 from .base_connector import BaseConnector, ConnectorStatus
 from .binance_connector import BinanceConnector
 from .bybit_connector import BybitConnector
+from .hyperliquid_connector import HyperliquidConnector
+from .kucoin_connector import KuCoinConnector
 from .connector_manager import ConnectorManager
 
 __all__ = [
     "BaseConnector", "ConnectorStatus",
-    "BinanceConnector", "BybitConnector",
+    "BinanceConnector", "BybitConnector", 
+    "HyperliquidConnector", "KuCoinConnector",
     "ConnectorManager"
 ]
-
-
-# ========== Update src/models/position.py ==========
-
-"""
-Position data model.
-"""
-
-from dataclasses import dataclass
-from decimal import Decimal
-from datetime import datetime
-from typing import Optional
-from enum import Enum
-
-
-class PositionSide(Enum):
-    """Position side enumeration"""
-    LONG = "LONG"
-    SHORT = "SHORT"
-    NONE = "NONE"
-
-
-@dataclass
-class Position:
-    """Trading position data class"""
-    exchange: str
-    symbol: str
-    side: PositionSide
-    size: Decimal
-    entry_price: Optional[Decimal] = None
-    mark_price: Optional[Decimal] = None
-    unrealized_pnl: Optional[Decimal] = None
-    margin: Optional[Decimal] = None
-    leverage: Optional[Decimal] = None
-    updated_at: Optional[datetime] = None
-    
-    def __post_init__(self):
-        if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
-    
-    @property
-    def is_long(self) -> bool:
-        """Check if position is long"""
-        return self.side == PositionSide.LONG and self.size > 0
-    
-    @property
-    def is_short(self) -> bool:
-        """Check if position is short"""
-        return self.side == PositionSide.SHORT and self.size > 0
-    
-    @property
-    def is_flat(self) -> bool:
-        """Check if position is flat (no position)"""
-        return self.size == 0 or self.side == PositionSide.NONE
-
-
-# ========== Update src/utils/math_utils.py ==========
-
-"""
-Mathematical utilities for trading calculations.
-"""
-
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Union
-
-
-def safe_decimal(value: Union[str, int, float, Decimal]) -> Decimal:
-    """Safely convert value to Decimal"""
-    try:
-        if isinstance(value, Decimal):
-            return value
-        return Decimal(str(value))
-    except (ValueError, TypeError):
-        return Decimal("0")
-
-
-def round_down(value: Decimal, decimals: int) -> Decimal:
-    """Round down to specified decimal places"""
-    if decimals <= 0:
-        return value.quantize(Decimal("1"), rounding=ROUND_DOWN)
-    
-    quantizer = Decimal("0.1") ** decimals
-    return value.quantize(quantizer, rounding=ROUND_DOWN)
-
-
-def round_up(value: Decimal, decimals: int) -> Decimal:
-    """Round up to specified decimal places"""
-    if decimals <= 0:
-        return value.quantize(Decimal("1"), rounding=ROUND_UP)
-    
-    quantizer = Decimal("0.1") ** decimals
-    return value.quantize(quantizer, rounding=ROUND_UP)
-
-
-def calculate_profit_percentage(entry_price: Decimal, exit_price: Decimal, side: str) -> Decimal:
-    """Calculate profit percentage for a trade"""
-    if entry_price <= 0:
-        return Decimal("0")
-    
-    if side.upper() == "LONG":
-        return (exit_price - entry_price) / entry_price * Decimal("100")
-    else:  # SHORT
-        return (entry_price - exit_price) / entry_price * Decimal("100")
-
-
-def calculate_funding_arbitrage_profit(
-    funding_rate_1: Decimal,
-    funding_rate_2: Decimal, 
-    position_size: Decimal,
-    hours: int = 8
-) -> Decimal:
-    """
-    Calculate potential profit from funding rate arbitrage.
-    
-    Args:
-        funding_rate_1: Funding rate on exchange 1 (where we go long)
-        funding_rate_2: Funding rate on exchange 2 (where we go short)
-        position_size: Position size in USD
-        hours: Hours until next funding (usually 8)
-    
-    Returns:
-        Expected profit in USD
-    """
-    # If funding_rate_1 < funding_rate_2, we profit by:
-    # - Going long on exchange 1 (receive funding if rate is negative)
-    # - Going short on exchange 2 (pay funding if rate is positive)
-    
-    profit_rate = funding_rate_2 - funding_rate_1
-    return profit_rate * position_size
